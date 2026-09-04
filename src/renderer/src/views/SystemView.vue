@@ -1,115 +1,183 @@
 <script setup lang="ts">
-// 系统功能演示页：文件操作 / 系统通知的实测入口（托盘为常驻行为，无需页面触发）
-const openedFile = ref<{ path: string; content: string } | null>(null)
-/** 可编辑的文本内容（打开后可修改再保存） */
-const editingContent = ref('')
-/** 操作反馈消息 */
-const feedback = ref('')
-/** 反馈类型：success / error */
-const feedbackType = ref<'success' | 'error'>('success')
+// 设置页：应用版本展示（含更新角标）+ 关闭窗口时行为（托盘常驻 / 退出应用）
+import type { UpdaterEvent } from '../../../preload/index.d'
 
-/** 打开文件并读取内容 */
-async function handleOpenFile(): Promise<void> {
-  feedback.value = ''
-  try {
-    const result = await window.api.selectAndReadFile('text')
-    // 用户取消对话框属于正常流程，静默返回
-    if (!result) return
-    openedFile.value = result
-    editingContent.value = result.content
-  } catch (error) {
-    // 读取失败（如权限不足、文件被锁）时给出可操作的提示
-    showFeedback(`打开失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+const appVersion = ref('')
+/** 关闭窗口是否隐藏到托盘（持久化到主进程 settings.json） */
+const closeToTray = ref(true)
+/** 设置加载中标记：避免在读取完成前误触发保存 */
+const loading = ref(true)
+
+/** 更新角标状态：unknown=未检查, checking, latest, error（下载/安装交互由更新弹窗承担） */
+const updateState = ref<'unknown' | 'checking' | 'latest' | 'error'>('unknown')
+/** 检查失败时拉取到的最新版本号（GitHub 最新 release，供手动下载） */
+const latestVersion = ref('')
+/** 最新版本下载页面地址（点击角标跳转系统浏览器） */
+const latestUrl = ref('')
+
+// 公开仓库的最新 release 接口与页面（同步于 electron-builder.yml 的 publish 配置）
+const RELEASE_API = 'https://api.github.com/repos/NingDuiYan/DesktopAIApplications/releases/latest'
+const RELEASE_PAGE = 'https://github.com/NingDuiYan/DesktopAIApplications/releases/latest'
+
+let unsubscribeUpdate: (() => void) | null = null
+
+/** 版本角标文案：仅"最新"与"检查失败兜底"两种语义，其余状态由更新弹窗负责 */
+const badgeText = computed(() => {
+  switch (updateState.value) {
+    case 'latest':
+      return '最新'
+    case 'error':
+      return latestVersion.value ? `最新 v${latestVersion.value}` : '最新版本'
+    default:
+      return ''
+  }
+})
+
+/** 角标背景色（latest=绿色表示最新 / error=红色警示需手动下载） */
+const badgeBg = computed(() =>
+  updateState.value === 'latest' ? 'var(--el-color-success)' : 'var(--el-color-danger)'
+)
+
+/** 是否展示角标：只有"已是最新"或"检查失败"时才展示，其余静默 */
+const badgeVisible = computed(() => updateState.value === 'latest' || updateState.value === 'error')
+
+/** 角标是否可点击（仅检查失败且有下载地址时可跳转手动下载） */
+const badgeClickable = computed(() => updateState.value === 'error' && !!latestUrl.value)
+
+/** 点击角标：检查失败时跳转 GitHub Releases 页面手动下载 */
+function handleBadgeClick(): void {
+  if (updateState.value === 'error' && latestUrl.value) {
+    // setWindowOpenHandler 已配置：外链交给系统浏览器打开
+    window.open(latestUrl.value, '_blank')
   }
 }
 
-/** 将编辑内容保存为新文件 */
-async function handleSaveFile(): Promise<void> {
-  if (!editingContent.value) {
-    showFeedback('内容为空，请先输入或打开文件', 'error')
-    return
-  }
+/** 检查失败后拉取最新 release 版本号（匿名访问公开仓库） */
+async function fetchLatestRelease(): Promise<void> {
+  if (latestUrl.value) return
   try {
-    const path = await window.api.saveFile({
-      defaultName: 'note.txt',
-      content: editingContent.value
-    })
-    if (!path) return
-    showFeedback(`已保存：${path}`, 'success')
-  } catch (error) {
-    showFeedback(`保存失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+    const res = await fetch(RELEASE_API)
+    if (!res.ok) return
+    const data = (await res.json()) as { tag_name?: string }
+    latestVersion.value = String(data.tag_name ?? '').replace(/^v/, '')
+    latestUrl.value = RELEASE_PAGE
+  } catch {
+    // 网络异常时保持空值，角标退化为不可点击的占位提示
   }
 }
 
-/** 发送系统通知 */
-async function handleNotify(): Promise<void> {
+/** 订阅主进程更新广播，驱动角标状态（下载/安装流程由更新弹窗处理，此处只关心结果态） */
+function handleUpdateEvent(payload: UpdaterEvent): void {
+  switch (payload.type) {
+    case 'not-available':
+      updateState.value = 'latest'
+      break
+    case 'error':
+      updateState.value = 'error'
+      void fetchLatestRelease()
+      break
+  }
+}
+
+/** 切换"关闭时"行为：同步到主进程并落盘 */
+async function handleCloseBehaviorChange(value?: string | number | boolean): Promise<void> {
+  if (value === undefined) return
   try {
-    const sent = await window.api.showNotification({
-      title: '桌面应用',
-      body: '这是一条来自主进程的系统通知，点击可回到窗口。'
-    })
-    if (!sent) {
-      showFeedback('当前系统不支持通知', 'error')
+    const settings = await window.api.updateSettings({ closeToTray: Boolean(value) })
+    closeToTray.value = settings.closeToTray
+  } catch (error) {
+    // 保存失败：回滚勾选状态，避免 UI 与真实行为不一致
+    closeToTray.value = !value
+    console.error('保存关闭行为设置失败:', error)
+  }
+}
+
+/** 版本信息与设置初始化（任一失败需清晰提示，不能永久 loading） */
+async function init(): Promise<void> {
+  try {
+    const [version, settings] = await Promise.all([
+      window.api.getAppVersion(),
+      window.api.getSettings()
+    ])
+    appVersion.value = version
+    closeToTray.value = settings.closeToTray
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 若尚无检查结果则补查一次（应用启动时的检查广播可能早于本页订阅而丢失） */
+async function ensureCheck(): Promise<void> {
+  if (updateState.value !== 'unknown') return
+  try {
+    const supported = await window.api.checkForUpdate()
+    // dev 模式下更新服务不可用，视为检查失败 → 展示最新版本并支持手动下载
+    if (!supported) {
+      updateState.value = 'error'
+      void fetchLatestRelease()
     }
-  } catch (error) {
-    showFeedback(`通知发送失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+  } catch {
+    updateState.value = 'error'
+    void fetchLatestRelease()
   }
 }
 
-/** 统一反馈展示（成功/失败走同一入口，便于控制显示时长） */
-function showFeedback(message: string, type: 'success' | 'error'): void {
-  feedback.value = message
-  feedbackType.value = type
-}
+onMounted(() => {
+  init()
+  // 订阅更新事件驱动角标（自动检查在 App 根组件挂载时统一触发）
+  unsubscribeUpdate = window.api.onUpdateEvent(handleUpdateEvent)
+  ensureCheck()
+})
+
+onUnmounted(() => {
+  // 移除事件订阅，防止内存泄漏与重复回调
+  unsubscribeUpdate?.()
+})
 </script>
 
 <template>
   <section class="system-view">
     <h2>设置</h2>
-    <p class="desc">
-      Electron 系统能力演示：文件对话框、系统通知；托盘为常驻行为（关闭窗口即隐藏到托盘）。
-    </p>
-
-    <el-alert
-      v-if="feedback"
-      :title="feedback"
-      :type="feedbackType"
-      show-icon
-      :closable="true"
-      class="feedback"
-      @close="feedback = ''"
-    />
 
     <el-card shadow="never" class="card">
       <template #header>
-        <div class="card-header">
-          <span>文件操作</span>
-          <div>
-            <el-button @click="handleOpenFile">打开文件</el-button>
-            <el-button type="primary" :disabled="!editingContent" @click="handleSaveFile">
-              另存为
-            </el-button>
-          </div>
-        </div>
+        <span>应用信息</span>
       </template>
-      <p v-if="openedFile" class="file-path">当前文件：{{ openedFile.path }}</p>
-      <el-input
-        v-model="editingContent"
-        type="textarea"
-        :rows="8"
-        placeholder="点击「打开文件」选择文本文件，或直接输入内容后「另存为」"
-        class="editor"
-      />
+      <ul class="info-list" v-loading="loading">
+        <li>
+          <span class="label">应用版本</span>
+          <div class="value-group">
+            <span class="value">v{{ appVersion || '-' }}</span>
+            <!-- 版本号右上角悬浮角标：仅在有明确更新结果时展示，背景色随状态切换 -->
+            <span
+              v-if="badgeVisible"
+              class="version-badge"
+              :class="{ 'is-clickable': badgeClickable }"
+              :style="{ background: badgeBg }"
+              @click="handleBadgeClick"
+            >
+              {{ badgeText }}
+            </span>
+          </div>
+        </li>
+      </ul>
     </el-card>
 
     <el-card shadow="never" class="card">
       <template #header>
-        <div class="card-header">
-          <span>系统通知</span>
-          <el-button type="primary" @click="handleNotify">发送通知</el-button>
-        </div>
+        <span>关闭行为</span>
       </template>
-      <p class="desc">通过主进程 Notification API 发送，点击通知可唤回窗口。</p>
+      <!-- 关闭行为：单选组，选中即同步持久化 -->
+      <div class="close-behavior">
+        <el-radio-group
+          v-model="closeToTray"
+          :disabled="loading"
+          @change="handleCloseBehaviorChange"
+        >
+          <el-radio :value="true">最小化到系统托盘</el-radio>
+          <el-radio :value="false">退出应用</el-radio>
+        </el-radio-group>
+      </div>
     </el-card>
   </section>
 </template>
@@ -117,52 +185,75 @@ function showFeedback(message: string, type: 'success' | 'error'): void {
 <style lang="scss" scoped>
 .system-view {
   padding: 24px;
-  max-width: 860px;
+  max-width: 640px;
   margin: 0 auto;
 
   h2 {
     font-size: 18px;
-    margin-bottom: 6px;
-  }
-
-  .desc {
-    font-size: 13px;
-    color: var(--color-text-secondary);
     margin-bottom: 18px;
-  }
-
-  .feedback {
-    margin-bottom: 16px;
-
-    // 长路径不换行会撑破布局
-    :deep(.el-alert__title) {
-      word-break: break-all;
-    }
   }
 
   .card {
     margin-bottom: 16px;
   }
 
-  .card-header {
+  // 版本信息列表：标签与值左右分布
+  .info-list {
+    list-style: none;
+    min-height: 40px;
+
+    li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+    }
+
+    .label {
+      font-size: 14px;
+      color: var(--color-text-primary);
+    }
+
+    // 版本号 + 右侧状态胶囊：同行水平排列，不再悬浮避免遮挡
+    .value-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .value {
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-text-primary);
+    }
+
+    // 状态胶囊：紧凑小号，背景色随状态切换，可点击项有 hover 反馈
+    .version-badge {
+      font-size: 11px;
+      font-weight: 500;
+      height: 18px;
+      line-height: 18px;
+      padding: 0 8px;
+      border-radius: 9px;
+      color: #fff;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px var(--el-box-shadow-lighter);
+
+      &.is-clickable {
+        cursor: pointer;
+
+        &:hover {
+          opacity: 0.85;
+        }
+      }
+    }
+  }
+
+  // 关闭行为：单选组平铺展示
+  .close-behavior {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-  }
-
-  .file-path {
-    font-size: 12px;
-    color: var(--color-text-muted);
-    margin-bottom: 10px;
-    word-break: break-all;
-  }
-
-  .editor {
-    :deep(.el-textarea__inner) {
-      font-family: 'JetBrains Mono', Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.6;
-    }
   }
 }
 </style>

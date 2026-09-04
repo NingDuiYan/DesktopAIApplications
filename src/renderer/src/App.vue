@@ -1,72 +1,42 @@
 <script setup lang="ts">
-// 应用根组件：无顶栏，右侧悬浮导航（首页 / 设置）+ 路由出口 + 更新弹窗
+// 应用根组件：组合顶部标题栏、悬浮导航、路由出口与更新弹窗
+import AppHeader from './components/AppHeader.vue'
+import FloatNav from './components/FloatNav.vue'
 import UpdateModal from './components/UpdateModal.vue'
-import { HomeFilled, Setting } from '@element-plus/icons-vue'
+
+onMounted(() => {
+  // 进入应用时自动检查一次版本更新（结果经 updater 事件广播，
+  // 由 UpdateModal 与设置页角标各自消费；dev 模式下返回 false，无需处理）
+  window.api.checkForUpdate().catch(() => {})
+})
 </script>
 
 <template>
   <div class="app-shell">
-    <!-- 右侧悬浮导航栏 -->
-    <nav class="float-nav">
-      <RouterLink to="/" class="nav-item" title="首页" aria-label="首页">
-        <el-icon :size="20"><HomeFilled /></el-icon>
-      </RouterLink>
-      <RouterLink to="/system" class="nav-item" title="设置" aria-label="设置">
-        <el-icon :size="20"><Setting /></el-icon>
-      </RouterLink>
-    </nav>
+    <!-- 顶部标题栏（拖拽 + 窗口控制），具体逻辑见 AppHeader.vue -->
+    <AppHeader />
+
+    <!-- 悬浮导航（拖动吸边 + 闲置收缩），具体逻辑见 FloatNav.vue -->
+    <FloatNav />
 
     <main class="app-content">
       <RouterView />
     </main>
+
     <UpdateModal />
   </div>
 </template>
 
 <style lang="scss" scoped>
 .app-shell {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
 }
 
-// 右侧悬浮栏：垂直图标组，居中于页面右缘
-.float-nav {
-  position: fixed;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  z-index: 100;
-
-  .nav-item {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    color: var(--color-text-secondary);
-    text-decoration: none;
-    transition:
-      background-color 0.2s,
-      color 0.2s;
-
-    &:hover {
-      background: var(--color-bg);
-      color: var(--color-primary);
-    }
-
-    // 当前路由高亮
-    &.router-link-active {
-      background: var(--color-primary);
-      color: #fff;
-    }
-  }
+// 内容区：占据 header 之外的剩余高度，滚动只发生在内容区内部
+.app-content {
+  flex: 1;
+  overflow: auto;
 }
 </style>

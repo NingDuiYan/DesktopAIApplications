@@ -20,6 +20,14 @@ win:
   icon: resources/icon.png
   target:
     - nsis
+mac:
+  # 应用图标：electron-builder 会自动将 png 转换为 icns
+  icon: resources/icon.png
+  category: public.app-category.utilities
+  target:
+    # dmg 与 zip 仅能在 macOS 环境构建（Windows 需配备 macOS 的 CI）
+    - dmg
+    - zip
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -46,6 +54,7 @@ electronDownload:
 # 自动更新源：GitHub Releases（electron-updater 读取 latest.yml）
 publish:
   provider: github
-  # TODO(heshu): 替换为你的 GitHub 仓库 owner/name，并配置 GH_TOKEN 后执行 pnpm run build:win
-  owner: your-github-username
-  repo: desktop-app
+  owner: NingDuiYan
+  repo: DesktopAIApplications
+  # electron-builder 26.15+ 默认创建草稿 release，须显式指定 release 类型才能对外可见
+  releaseType: release

@@ -48,6 +48,26 @@ declare global {
       installUpdate: () => Promise<void>
       /** 订阅更新事件，返回取消订阅函数 */
       onUpdateEvent: (listener: (payload: UpdaterEvent) => void) => () => void
+      /** 窗口控制：最小化 */
+      windowMinimize: () => Promise<void>
+      /** 窗口控制：最大化/还原 */
+      windowMaximize: () => Promise<void>
+      /** 窗口控制：关闭（隐藏到托盘，不是退出） */
+      windowClose: () => Promise<void>
+      /** 查询窗口当前是否最大化 */
+      windowIsMaximized: () => Promise<boolean>
+      /** 获取窗口当前坐标（屏幕坐标 [x, y]） */
+      getWindowPosition: () => Promise<[number, number]>
+      /** 移动窗口到指定屏幕坐标（自绘标题栏拖动） */
+      moveWindow: (x: number, y: number) => Promise<void>
+      /** 获取应用版本号（package.json version） */
+      getAppVersion: () => Promise<string>
+      /** 读取应用设置（关窗是否隐藏到托盘等） */
+      getSettings: () => Promise<{ closeToTray: boolean }>
+      /** 更新应用设置并落盘（返回更新后的完整设置） */
+      updateSettings: (patch: { closeToTray: boolean }) => Promise<{ closeToTray: boolean }>
+      /** 订阅窗口最大化状态变化，返回取消订阅函数 */
+      onWindowMaximizedChange: (listener: (maximized: boolean) => void) => () => void
     }
   }
 }

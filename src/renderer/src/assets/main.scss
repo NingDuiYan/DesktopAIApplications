@@ -43,17 +43,35 @@ button {
   cursor: pointer;
 }
 
-// 无边框滚动条（桌面应用观感）
+// 精致滚动条：胶囊滑块、轨道透明、hover 加深；所有滚动区域统一生效
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
+}
 
-  &-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  &-track {
-    background: transparent;
+::-webkit-scrollbar-thumb {
+  // border + background-clip 让滑块四周留白，视觉更纤细精致
+  background: rgba(15, 23, 42, 0.32);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+
+  &:hover {
+    background: rgba(15, 23, 42, 0.56);
+    background-clip: padding-box;
   }
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+// 兼容非 Chromium 环境（如 Firefox），保持同样细窄观感
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.32) transparent;
 }

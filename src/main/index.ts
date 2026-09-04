@@ -5,13 +5,14 @@
  * 单实例策略：应用关窗后常驻托盘，因此多次启动（尤其 dev 反复执行）会叠加实例。
  * 通过 requestSingleInstanceLock 保证整个系统只有一个实例（一个托盘、一个窗口）。
  */
-import { app, shell, BrowserWindow, ipcMain, Notification, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Notification, nativeImage, Menu } from 'electron'
 import { join } from 'node:path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initAutoUpdater } from './updater'
 import { registerFileIpc } from './file-service'
 import { createTray } from './tray'
 import { resolveAppIconPath } from './icon'
+import { loadSettings, getSettings, updateSettings, type AppSettings } from './settings'
 
 // 单实例锁：拿不到锁说明已有实例在运行，直接退出，避免出现多个托盘/窗口
 if (!app.requestSingleInstanceLock()) {
@@ -31,20 +32,47 @@ if (!app.requestSingleInstanceLock()) {
     isQuitting = true
   })
 
-  // 托盘常驻：所有窗口关闭后不退出（macOS 逻辑同此），退出仅走托盘菜单
+  // 关闭行为跟随设置：托盘常驻模式（默认）窗口全关后保持存活；直接退出模式则结束应用
   app.on('window-all-closed', () => {
-    // 保留空实现：窗口全部销毁（如内存回收异常）时也维持托盘存活
+    if (!getSettings().closeToTray) {
+      app.quit()
+    }
   })
 
   app.whenReady().then(() => {
+    // 启动时从磁盘加载设置（磁盘异常时回退默认值）
+    loadSettings()
+
     // Windows 下设置应用用户模型 ID，用于任务栏分组
     electronApp.setAppUserModelId('com.example.desktopapp')
 
     // 注册 IPC：渲染进程通过 invoke 查询 Electron 版本（沙箱下 preload 无法直接读 process.versions）
     ipcMain.handle('app:get-electron-version', () => process.versions.electron)
+    // 应用版本号（package.json version，打包后为真实发布版本）
+    ipcMain.handle('app:get-version', () => app.getVersion())
+
+    // 设置读写 IPC：设置页勾选"关窗隐藏到托盘"等配置
+    ipcMain.handle('settings:get', () => getSettings())
+    ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => updateSettings(patch))
 
     // 文件操作 IPC（打开/保存对话框 + 读写）
     registerFileIpc()
+
+    // 移除原生菜单栏（File/Edit/View/Window），顶部改为页面自定义 header
+    Menu.setApplicationMenu(null)
+
+    // 窗口控制 IPC：供页面 header 的按钮使用（无边框窗口下替代系统按钮）
+    ipcMain.handle('window:minimize', () => mainWindow?.minimize())
+    ipcMain.handle('window:maximize', () => {
+      if (!mainWindow) return
+      mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+    })
+    ipcMain.handle('window:close', () => mainWindow?.close())
+    ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
+
+    // 窗口移动 IPC：自绘标题栏（无系统拖拽区）通过 IPC 移动窗口，支持跨屏幕拖动
+    ipcMain.handle('window:get-position', () => mainWindow?.getPosition() ?? [0, 0])
+    ipcMain.handle('window:move', (_event, x: number, y: number) => mainWindow?.setPosition(x, y))
 
     // 系统通知：点击通知时聚焦主窗口
     ipcMain.handle(
@@ -109,7 +137,8 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: true,
+    // 无边框窗口：去掉系统标题栏，窗口控制按钮在页面 header 中自实现
+    frame: false,
     title: '桌面应用',
     icon: nativeImage.createFromPath(resolveAppIconPath()),
     // 安全基线：开启沙箱与上下文隔离，关闭 node/webview，仅通过 contextBridge 暴露 IPC API
@@ -128,9 +157,13 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
-  // 关闭窗口 = 隐藏到托盘（常驻），真正退出走托盘菜单"退出"
+  // 最大化状态变化推送渲染进程，供 header 按钮图标切换（最大化 ⇄ 还原）
+  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized-changed', true))
+  mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized-changed', false))
+
+  // 关闭窗口：跟随设置决定"隐藏到托盘"（常驻）还是"直接关闭"（配合 window-all-closed 退出）
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (!isQuitting && getSettings().closeToTray) {
       event.preventDefault()
       mainWindow?.hide()
     }

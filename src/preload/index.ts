@@ -71,6 +71,46 @@ const api = {
     return () => {
       ipcRenderer.removeListener('updater:event', handler)
     }
+  },
+
+  /** 窗口控制：最小化 */
+  windowMinimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  /** 窗口控制：最大化/还原 */
+  windowMaximize: (): Promise<void> => ipcRenderer.invoke('window:maximize'),
+  /** 窗口控制：关闭（隐藏到托盘，不是退出） */
+  windowClose: (): Promise<void> => ipcRenderer.invoke('window:close'),
+  /** 查询窗口当前是否最大化 */
+  windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+  /** 获取窗口当前坐标（屏幕坐标 [x, y]），供自绘标题栏拖动使用 */
+  getWindowPosition: (): Promise<[number, number]> => ipcRenderer.invoke('window:get-position'),
+
+  /** 移动窗口到指定屏幕坐标（自绘标题栏拖动时逐帧调用） */
+  moveWindow: (x: number, y: number): Promise<void> => ipcRenderer.invoke('window:move', x, y),
+
+  /** 获取应用版本号（package.json version） */
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+
+  /** 读取应用设置（关窗是否隐藏到托盘等） */
+  getSettings: (): Promise<{ closeToTray: boolean }> => ipcRenderer.invoke('settings:get'),
+
+  /** 更新应用设置并落盘（返回更新后的完整设置） */
+  updateSettings: (patch: { closeToTray: boolean }): Promise<{ closeToTray: boolean }> =>
+    ipcRenderer.invoke('settings:set', patch),
+
+  /**
+   * 订阅窗口最大化状态变化（最大化 ⇄ 还原时回调）。
+   *
+   * @param listener 回调，参数为是否最大化
+   * @returns 取消订阅函数
+   */
+  onWindowMaximizedChange: (listener: (maximized: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, maximized: boolean): void => {
+      listener(maximized)
+    }
+    ipcRenderer.on('window:maximized-changed', handler)
+    return () => {
+      ipcRenderer.removeListener('window:maximized-changed', handler)
+    }
   }
 }
 

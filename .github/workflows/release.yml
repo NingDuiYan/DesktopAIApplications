@@ -1,0 +1,34 @@
+name: 发布双平台
+
+on:
+  push:
+    # 推送 v* 格式的标签（如 v0.1.3）时自动触发双平台构建发布
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    # macOS runner 同时支持构建 mac（dmg/zip）与 windows（nsis）安装包
+    runs-on: macos-latest
+    env:
+      # 写入 GitHub Releases 的仓库级 token（无需个人 token）
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 未配置苹果开发者证书时跳过签名，否则构建会失败
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建并发布（Windows + macOS）
+        run: pnpm run publish
