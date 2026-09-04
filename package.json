@@ -1,6 +1,6 @@
 {
   "name": "desktop-app",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "基于 Electron + Vue3 的桌面应用骨架",
   "main": "./out/main/index.js",
   "author": "heshu",
@@ -13,6 +13,7 @@
     "start": "electron-vite preview",
     "build:win": "electron-vite build && electron-builder --win --publish never",
     "release:win": "electron-vite build && electron-builder --win --publish always",
+    "release": "node scripts/release.js",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web"
