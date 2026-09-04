@@ -1,0 +1,10 @@
+// Element Plus 主题定制：通过覆盖 SCSS 变量实现，配合构建器 importStyle: 'sass' 生效
+// 必须在 additionalData 中注入（先于组件样式编译）
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  // 主色：与全局 --color-primary 保持一致
+  $colors: (
+    'primary': (
+      'base': #3b82f6
+    )
+  )
+);

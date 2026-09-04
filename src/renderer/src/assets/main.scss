@@ -1,0 +1,59 @@
+// 全局基础样式（SCSS）
+
+// 主题变量
+:root {
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-text-invert: #ffffff;
+  --color-header: #334155;
+  --color-primary: #3b82f6;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+// 基础重置
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100vh;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+// 无边框滚动条（桌面应用观感）
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+
+  &-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  &-track {
+    background: transparent;
+  }
+}

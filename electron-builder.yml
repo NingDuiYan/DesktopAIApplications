@@ -1,0 +1,51 @@
+# 打包配置：electron-builder 使用
+appId: com.example.desktopapp
+productName: 桌面应用
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+asarUnpack:
+  - resources/**
+win:
+  executableName: desktop-app
+  # 应用图标：exe、安装向导、快捷方式、开始菜单、系统托盘均使用此图标
+  icon: resources/icon.png
+  target:
+    - nsis
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  # 向导式安装：允许选择安装目录、逐页确认
+  oneClick: false
+  # 允许用户修改安装目录（默认 C:\Users\xxx\AppData\Local\Programs）
+  allowToChangeInstallationDirectory: true
+  # 允许用户取消勾选"创建桌面快捷方式"等选项（必须开启才会显示选项页）
+  allowElevation: true
+  # 自定义 NSIS 脚本：安装向导增加"创建快捷方式"选项页
+  include: build/installer.nsh
+  # 必须开启开始菜单快捷方式，才会创建开始菜单快捷方式
+  createStartMenuShortcut: true
+  # 选项页显示"创建桌面快捷方式"复选框（默认勾选）
+  createDesktopShortcut: true
+  # 完成页显示"运行应用"复选框（默认勾选，用户可取消）
+  runAfterFinish: true
+  # 卸载时不删除用户数据（保留配置，避免误卸载丢数据）
+  deleteAppDataOnUninstall: false
+npmRebuild: false
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+# 自动更新源：GitHub Releases（electron-updater 读取 latest.yml）
+publish:
+  provider: github
+  # TODO(heshu): 替换为你的 GitHub 仓库 owner/name，并配置 GH_TOKEN 后执行 pnpm run build:win
+  owner: your-github-username
+  repo: desktop-app
