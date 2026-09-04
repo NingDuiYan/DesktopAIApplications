@@ -27,7 +27,7 @@ loadElectronVersion()
     <h2>{{ appStore.appName }}</h2>
     <p class="slogan">基于 Electron + Vue3 + TypeScript + Element Plus 的桌面应用骨架已就绪</p>
     <div class="meta">
-      <el-tag type="success" effect="plain">应用 v0.1.2</el-tag>
+      <el-tag type="success" effect="plain">应用 v0.1.3</el-tag>
       <el-tag v-if="electronVersion" type="info" effect="plain">
         Electron {{ electronVersion }}
       </el-tag>
