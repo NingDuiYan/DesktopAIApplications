@@ -197,7 +197,7 @@ onUnmounted(() => {
         </el-button>
       </template>
       <template v-else-if="status === 'downloading'">
-        <span class="downloading-hint">{{ progressPercent }}%</span>
+        <span class="downloading-hint">下载完成后将提示重启安装</span>
       </template>
       <template v-else-if="status === 'downloaded'">
         <el-button round type="primary" @click="handleInstall">
@@ -408,10 +408,8 @@ onUnmounted(() => {
 }
 
 .downloading-hint {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-color-primary);
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 // 下载中图标呼吸动画
