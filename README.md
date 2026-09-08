@@ -133,6 +133,59 @@ pnpm publish
 | 新窗口拦截 | `setWindowOpenHandler` 拒绝一切 window.open，仅白名单协议外开 |
 | 最小权限 | 渲染进程无 fs/dialog 能力，文件操作经主进程对话框确认后执行 |
 
+## 切换为自己的 GitHub 仓库（发布 + 热更）
+
+模板默认指向 `NingDuiYan/DesktopAIApplications`，换成自己的仓库只需同步修改 **3 处**：
+
+### 第 1 处：electron-builder.yml（发布与热更源，必改）
+
+```yaml
+publish:
+  provider: github
+  owner: <你的GitHub用户名>
+  repo: <你的仓库名>
+  releaseType: release
+```
+
+这是自动更新的实际更新源（electron-updater 启动时读取 GitHub Releases 的 `latest.yml`）。
+
+### 第 2 处：package.json（打包产物元信息，必改）
+
+```json
+{
+  "name": "desktop-app",
+  "version": "0.1.4",
+  "author": "<你的名字>"
+}
+```
+
+> 注意：`name` 是安装包文件名与更新 URL 的一部分（`desktop-app-<version>-setup.exe`），改名后记得同步 `electron-builder.yml` 里的 `productName` / `executableName`。
+
+### 第 3 处：SystemView.vue（手动下载兜底链接，必改）
+
+`src/renderer/src/views/SystemView.vue` 中两个常量，用于更新检查失败时跳转手动下载：
+
+```ts
+const RELEASE_API = 'https://api.github.com/repos/<你的用户名>/<你的仓库名>/releases/latest'
+const RELEASE_PAGE = 'https://github.com/<你的用户名>/<你的仓库名>/releases/latest'
+```
+
+### 额外检查项（视需要）
+
+| 位置 | 是否必改 | 说明 |
+|------|---------|------|
+| `appId`（electron-builder.yml） | 建议改 | 改成 `com.<你的名字>.<应用名>`；appId 变化会导致已装用户的自动更新失效（视为不同应用），需重新安装 |
+| `settings.ts` 所在的 `userData` 路径 | 否 | Electron 自动按 `productName` 隔离用户数据目录 |
+| GitHub 仓库设置 | 必做 | 仓库需为 Public（私有仓库的 Releases 下载需要 token，自动更新无法匿名访问） |
+| Personal Access Token | 必做 | 创建 fine-grained token，仅授予该仓库 Contents 读写权限，供 `GH_TOKEN` 发布用 |
+
+### 验证热更流程
+
+1. 修改代码后 `pnpm pack`（本地 bump 版本，如 0.1.4 → 0.1.5）
+2. 在发布终端设置 `$env:GH_TOKEN="..."` 后 `pnpm publish`
+3. 到 GitHub 仓库 Releases 页确认 `latest.yml`、`*.blockmap`、`setup.exe` 三类文件齐全
+4. 启动**旧版本**应用（手动安装旧 setup.exe），等待 3 秒自动检查或到设置页手动检查，应弹出更新弹窗并完成「下载 → 重启安装」
+
 ## 已知注意事项
 
 - 未做代码签名，安装包首次运行会触发 Windows SmartScreen「未知发布者」警告
